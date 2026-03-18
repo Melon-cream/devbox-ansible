@@ -1,0 +1,9 @@
+.docs
+.tmp
+.DS_Store
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.retry
+inventories/remote/hosts.yml

@@ -1,0 +1,43 @@
+---
+workstation_supported_os_families:
+  - Debian
+
+workstation_target_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true) }}"
+workstation_target_group: "{{ workstation_target_user }}"
+
+workstation_install_packages: true
+workstation_install_mise: true
+workstation_install_oh_my_zsh: true
+workstation_install_zellij: true
+
+workstation_apt_packages:
+  - build-essential
+  - curl
+  - git
+  - gh
+  - jq
+  - mosh
+  - neovim
+  - podman
+  - ripgrep
+  - stow
+  - unzip
+  - zsh
+
+workstation_dotfiles_repo: https://github.com/Melon-cream/linux-dotfiles.git
+workstation_dotfiles_version: main
+workstation_dotfiles_dest: ""
+workstation_stow_target: ""
+workstation_stow_packages:
+  - p10k
+  - zellij
+
+workstation_mise_install_url: https://mise.run
+workstation_oh_my_zsh_repo: https://github.com/ohmyzsh/ohmyzsh.git
+workstation_oh_my_zsh_dest: ""
+workstation_zellij_version: 0.43.1
+workstation_zellij_archive_name: zellij-x86_64-unknown-linux-musl.tar.gz
+workstation_zellij_download_url: >-
+  https://github.com/zellij-org/zellij/releases/download/v{{ workstation_zellij_version }}/{{ workstation_zellij_archive_name }}
+workstation_zellij_install_dir: "/opt/zellij/{{ workstation_zellij_version }}"
+workstation_zellij_bin_path: /usr/local/bin/zellij

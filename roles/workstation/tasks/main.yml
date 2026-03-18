@@ -1,0 +1,147 @@
+---
+- name: Fail on unsupported operating system family
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in workstation_supported_os_families
+    fail_msg: >-
+      This role currently supports {{ workstation_supported_os_families | join(', ') }} systems.
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: workstation_install_packages
+
+- name: Install apt packages
+  ansible.builtin.apt:
+    name: "{{ workstation_apt_packages }}"
+    state: present
+  become: true
+  when: workstation_install_packages
+
+- name: Resolve target user account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ workstation_target_user }}"
+
+- name: Set resolved home directory
+  ansible.builtin.set_fact:
+    workstation_home_dir: "{{ ansible_facts.getent_passwd[workstation_target_user][4] }}"
+
+- name: Set effective target paths
+  ansible.builtin.set_fact:
+    workstation_effective_dotfiles_dest: >-
+      {{ workstation_dotfiles_dest | default('', true) or (workstation_home_dir ~ '/src/dotfiles') }}
+    workstation_effective_stow_target: >-
+      {{ workstation_stow_target | default('', true) or workstation_home_dir }}
+    workstation_effective_oh_my_zsh_dest: >-
+      {{ workstation_oh_my_zsh_dest | default('', true) or (workstation_home_dir ~ '/.oh-my-zsh') }}
+
+- name: Ensure source directory exists
+  ansible.builtin.file:
+    path: "{{ workstation_home_dir }}/src"
+    state: directory
+    mode: "0755"
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Clone dotfiles repository
+  ansible.builtin.git:
+    repo: "{{ workstation_dotfiles_repo }}"
+    dest: "{{ workstation_effective_dotfiles_dest }}"
+    version: "{{ workstation_dotfiles_version }}"
+    update: true
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Install mise
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL "{{ workstation_mise_install_url }}" | sh
+  args:
+    executable: /bin/bash
+    creates: "{{ workstation_home_dir }}/.local/bin/mise"
+  when: workstation_install_mise
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Install Oh My Zsh
+  ansible.builtin.git:
+    repo: "{{ workstation_oh_my_zsh_repo }}"
+    dest: "{{ workstation_effective_oh_my_zsh_dest }}"
+    version: master
+    update: true
+  when: workstation_install_oh_my_zsh
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Ensure zellij install directory exists
+  ansible.builtin.file:
+    path: "{{ workstation_zellij_install_dir }}"
+    state: directory
+    mode: "0755"
+  when: workstation_install_zellij
+  become: true
+
+- name: Download zellij release archive
+  ansible.builtin.get_url:
+    url: "{{ workstation_zellij_download_url }}"
+    dest: "/tmp/{{ workstation_zellij_archive_name }}"
+    mode: "0644"
+  when: workstation_install_zellij
+  become: true
+
+- name: Unpack zellij binary
+  ansible.builtin.unarchive:
+    src: "/tmp/{{ workstation_zellij_archive_name }}"
+    dest: "{{ workstation_zellij_install_dir }}"
+    remote_src: true
+    creates: "{{ workstation_zellij_install_dir }}/zellij"
+  when: workstation_install_zellij
+  become: true
+
+- name: Link zellij binary into PATH
+  ansible.builtin.file:
+    src: "{{ workstation_zellij_install_dir }}/zellij"
+    dest: "{{ workstation_zellij_bin_path }}"
+    state: link
+    force: true
+  when: workstation_install_zellij
+  become: true
+
+- name: Ensure configured stow packages exist
+  ansible.builtin.stat:
+    path: "{{ workstation_effective_dotfiles_dest }}/{{ item }}"
+  loop: "{{ workstation_stow_packages }}"
+  register: workstation_stow_package_stats
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Fail when a configured stow package is missing
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+    fail_msg: "Missing stow package: {{ item.item }}"
+  loop: "{{ workstation_stow_package_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Restow dotfiles packages
+  ansible.builtin.shell: |
+    set -euo pipefail
+    dry_run_output="$(stow -n -v --target='{{ workstation_effective_stow_target }}' --dir='{{ workstation_effective_dotfiles_dest }}' '{{ item }}' 2>&1 || true)"
+    if [[ "$dry_run_output" =~ (^|$'\n')(LINK|UNLINK|MKDIR|RMDIR): ]]; then
+      stow --target='{{ workstation_effective_stow_target }}' --dir='{{ workstation_effective_dotfiles_dest }}' --restow '{{ item }}'
+      printf 'changed\n'
+    fi
+  args:
+    executable: /bin/bash
+  register: workstation_stow_results
+  loop: "{{ workstation_stow_packages }}"
+  loop_control:
+    label: "{{ item }}"
+  changed_when: "'changed' in workstation_stow_results.stdout"
+  become: true
+  become_user: "{{ workstation_target_user }}"
