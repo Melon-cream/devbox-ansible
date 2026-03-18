@@ -7,6 +7,7 @@ workstation_target_group: "{{ workstation_target_user }}"
 
 workstation_install_packages: true
 workstation_install_mise: true
+workstation_install_opencode: true
 workstation_install_oh_my_zsh: true
 workstation_install_zellij: true
 
@@ -33,6 +34,10 @@ workstation_stow_packages:
   - zellij
 
 workstation_mise_install_url: https://mise.run
+workstation_opencode_install_url: https://opencode.ai/install
+workstation_opencode_version: 1.2.27
+workstation_opencode_bin_dir: ""
+workstation_opencode_bin_path: /usr/local/bin/opencode
 workstation_oh_my_zsh_repo: https://github.com/ohmyzsh/ohmyzsh.git
 workstation_oh_my_zsh_dest: ""
 workstation_zellij_version: 0.43.1

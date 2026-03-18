@@ -35,6 +35,8 @@
       {{ workstation_dotfiles_dest | default('', true) or (workstation_home_dir ~ '/src/dotfiles') }}
     workstation_effective_stow_target: >-
       {{ workstation_stow_target | default('', true) or workstation_home_dir }}
+    workstation_effective_opencode_bin_dir: >-
+      {{ workstation_opencode_bin_dir | default('', true) or (workstation_home_dir ~ '/.opencode/bin') }}
     workstation_effective_oh_my_zsh_dest: >-
       {{ workstation_oh_my_zsh_dest | default('', true) or (workstation_home_dir ~ '/.oh-my-zsh') }}
 
@@ -65,6 +67,35 @@
   when: workstation_install_mise
   become: true
   become_user: "{{ workstation_target_user }}"
+
+- name: Ensure opencode binary directory exists
+  ansible.builtin.file:
+    path: "{{ workstation_effective_opencode_bin_dir }}"
+    state: directory
+    mode: "0755"
+  when: workstation_install_opencode
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Install opencode
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL "{{ workstation_opencode_install_url }}" | bash -s -- --version {{ workstation_opencode_version }} --no-modify-path
+  args:
+    executable: /bin/bash
+    creates: "{{ workstation_effective_opencode_bin_dir }}/opencode"
+  when: workstation_install_opencode
+  become: true
+  become_user: "{{ workstation_target_user }}"
+
+- name: Link opencode binary into PATH
+  ansible.builtin.file:
+    src: "{{ workstation_effective_opencode_bin_dir }}/opencode"
+    dest: "{{ workstation_opencode_bin_path }}"
+    state: link
+    force: true
+  when: workstation_install_opencode
+  become: true
 
 - name: Install Oh My Zsh
   ansible.builtin.git:
